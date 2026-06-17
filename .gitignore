@@ -20,3 +20,8 @@ Desktop.ini
 .DS_Store
 *.swp
 .idea/
+
+# === 游戏目录联接（junction）===
+# Game 是指向本机 Steam 游戏目录的符号链接，仅供本地开发查看资源/反编译代码，
+# 绝不可提交（会卷入整个游戏本体，且含版权内容）。
+/Game
