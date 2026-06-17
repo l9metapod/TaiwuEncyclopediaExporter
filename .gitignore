@@ -1,0 +1,22 @@
+# === 编译产物 ===
+bin/
+obj/
+*.dll.config
+*.pdb
+*.user
+*.suo
+.vs/
+
+# === 导出产物（由 Mod 运行时生成，不入库）===
+Mod/EncyclopediaExporter/output/
+
+# === Python ===
+__pycache__/
+*.pyc
+
+# === 系统/编辑器 ===
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+.idea/
