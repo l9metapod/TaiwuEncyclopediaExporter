@@ -16,11 +16,14 @@
   </PropertyGroup>
 
   <!--
-    GameDir: 游戏根目录。默认相对路径指向本工程的上级目录。
-    若游戏装在别处，用: msbuild -p:GameDir="D:\path\to\The Scroll Of Taiwu"
+    GameDir: 游戏根目录。本仓库通过本地的 Game junction（目录联接）指向 Steam 游戏目录，
+    便于在仓库内直接查看游戏资源与反编译代码、以及引用游戏程序集。
+    建 junction：mklink /J Game "D:\...\The Scroll Of Taiwu"
+    （Game 已在 .gitignore 中排除，不会提交。）
+    若游戏装在别处且不想用 junction，可改用: msbuild -p:GameDir="D:\path\to\The Scroll Of Taiwu"
   -->
   <PropertyGroup>
-    <GameDir>$(MSBuildThisFileDirectory)..\</GameDir>
+    <GameDir>$(MSBuildThisFileDirectory)..\Game\</GameDir>
     <ManagedDir>$(GameDir)The Scroll of Taiwu_Data\Managed\</ManagedDir>
     <ModOutputDir>$(GameDir)Mod\EncyclopediaExporter\Plugins\</ModOutputDir>
   </PropertyGroup>
