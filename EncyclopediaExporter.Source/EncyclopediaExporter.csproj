@@ -47,6 +47,15 @@
       <HintPath>$(ManagedDir)UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- 游戏配置表（运行时读取功法/特性/武器等数值字段）-->
+    <Reference Include="GameData.Shared">
+      <HintPath>$(ManagedDir)GameData.Shared.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GameData.Common">
+      <HintPath>$(ManagedDir)GameData.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <Target Name="CopyToModAfterBuild" AfterTargets="Build">

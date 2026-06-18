@@ -1,63 +1,101 @@
 using System;
 using System.IO;
 using EncyclopediaExporter.Core;
+using EncyclopediaExporter.Models;
 using TaiwuModdingLib.Core.Plugin;
 using UnityEngine;
 
 namespace EncyclopediaExporter
 {
     /// <summary>
-    /// 百科导出 Mod 入口。玩家启用本 Mod 时调用 Initialize()，
-    /// 自动检测百科源文件变更并重建为 Markdown。
+    /// 百科导出 Mod 入口。
+    /// 启用时读取百科源数据 + 运行时配置，重建为 Markdown 文档。
     /// </summary>
     [PluginConfig("EncyclopediaExporter", "EncyclopediaExporter", "1.0.0")]
     public class PluginEntry : TaiwuRemakePlugin
     {
-        private const string TAG = "[EncyclopediaExporter]";
+        private string _assetsDir;
+        private string _outputDir;
+        private string _cachePath;
+        private string _gameVersion;
+        private string _modDir;
 
         public override void Initialize()
         {
+            ResolvePaths();
+            if (!Directory.Exists(_assetsDir))
+            {
+                LogWarn("找不到百科数据目录: " + _assetsDir);
+                return;
+            }
+            DoExport(force: false);
+        }
+
+        /// <summary>
+        /// 响应玩家在 mod 设置面板改设置后点「应用」。
+        /// 检查「强制重新导出」开关：若打开则立即重建，完成后关掉开关。
+        /// </summary>
+        public override void OnModSettingUpdate()
+        {
+            ResolvePaths();
+            bool force = false;
+            if (ModManager.GetSetting(ModIdStr, "ForceReExport", ref force) && force)
+            {
+                Log("检测到「强制重新导出」，开始重建...");
+                DoExport(force: true);
+                // 关掉开关，避免下次误触发
+                TrySetSetting("ForceReExport", false);
+            }
+        }
+
+        public override void Dispose() { }
+
+        /// <summary>解析所有路径（供 Initialize/OnModSettingUpdate 复用）。</summary>
+        private void ResolvePaths()
+        {
+            _assetsDir = Path.Combine(Application.streamingAssetsPath,
+                "Language_CN", "EncyclopediaAssets");
+            var gameRoot = new DirectoryInfo(Application.dataPath).Parent.FullName;
+            var modRoot = ModManager.GetModRootFolder();
+            _modDir = Path.Combine(modRoot, "EncyclopediaExporter");
+            // 输出到游戏根目录下（独立于 mod 目录），避免上传创意工坊时把生成的文档一起打包。
+            _outputDir = Path.Combine(gameRoot, "EncyclopediaExporter_Output");
+            _cachePath = Path.Combine(Application.persistentDataPath,
+                "EncyclopediaExporter.cache.json");
+            _gameVersion = Application.version;
+        }
+
+        /// <summary>
+        /// 执行重建。force=true 时跳过哈希缓存检查，无条件重建。
+        /// </summary>
+        private void DoExport(bool force)
+        {
             try
             {
-                Log("开始检测百科源文件...");
-
-                // 1. 路径解析
-                var assetsDir = Path.Combine(Application.streamingAssetsPath,
-                    "Language_CN", "EncyclopediaAssets");
-                var modRoot = GetModRootFolder();
-                var modDir = Path.Combine(modRoot, "EncyclopediaExporter");
-                var outputDir = Path.Combine(modDir, "output");
-                // 缓存放 persistentDataPath（避免创意工坊覆盖、无需权限）
-                var cachePath = Path.Combine(Application.persistentDataPath,
-                    "EncyclopediaExporter.cache.json");
-                var gameVersion = Application.version;
-
-                if (!Directory.Exists(assetsDir))
+                var hasher = new HashCache(_cachePath);
+                if (!force)
                 {
-                    LogWarn("找不到百科数据目录: " + assetsDir);
-                    return;
+                    if (!hasher.IsChanged(_assetsDir, _gameVersion, _outputDir))
+                    {
+                        Log("百科源文件未变更，跳过重建。");
+                        Log("输出目录: " + _outputDir);
+                        return;
+                    }
+                    Log("检测到变更，开始重建百科...");
+                }
+                else
+                {
+                    Log("强制重建百科...");
                 }
 
-                // 2. 哈希比对
-                var hasher = new HashCache(cachePath);
-                if (!hasher.IsChanged(assetsDir, gameVersion))
-                {
-                    Log("百科源文件未变更，跳过重建。");
-                    Log("输出目录: " + outputDir);
-                    return;
-                }
-
-                // 3. 重建
-                Log("检测到变更，开始重建百科...");
-                Directory.CreateDirectory(modDir);
-                var builder = new EncyclopediaBuilder(assetsDir, outputDir);
+                Directory.CreateDirectory(_outputDir);
+                var builder = new EncyclopediaBuilder(_assetsDir, _outputDir);
                 int count = builder.Build();
 
-                // 4. 更新缓存
-                hasher.Update(assetsDir, gameVersion);
+                hasher.Update(_assetsDir, _gameVersion);
 
-                Log("重建完成，共 " + count + " 页。");
-                Log("输出目录: " + outputDir);
+                Log("重建完成，共 " + count + " 项。");
+                Log("输出目录: " + _outputDir);
             }
             catch (Exception ex)
             {
@@ -65,17 +103,28 @@ namespace EncyclopediaExporter
             }
         }
 
-        public override void Dispose() { }
-
-        /// <summary>获取 Mod 根目录（ModManager.GetModRootFolder 的等价实现）。</summary>
-        private static string GetModRootFolder()
+        private void TrySetSetting(string key, bool value)
         {
-            var dataParent = new DirectoryInfo(Application.dataPath).Parent;
-            return Path.Combine(dataParent.FullName, "Mod");
+            try
+            {
+                var modInfo = ModManager.GetModInfo(ModIdStr);
+                if (modInfo == null) return;
+                var entries = modInfo.ModSettingEntries;
+                if (entries == null) return;
+                foreach (var e in entries)
+                {
+                    if (e is FrameWork.ModSystem.ToggleSetting ts && ts.Key == key)
+                    {
+                        ts.Value = value;
+                        break;
+                    }
+                }
+            }
+            catch { /* 写不回不影响重建结果，开关下次启动会重置 */ }
         }
 
-        private static void Log(string msg) => Debug.Log(TAG + " " + msg);
-        private static void LogWarn(string msg) => Debug.LogWarning(TAG + " " + msg);
-        private static void LogError(string msg) => Debug.LogError(TAG + " " + msg);
+        private void Log(string msg) => Debug.Log("[EncyclopediaExporter] " + msg);
+        private void LogWarn(string msg) => Debug.LogWarning("[EncyclopediaExporter] " + msg);
+        private void LogError(string msg) => Debug.LogError("[EncyclopediaExporter] " + msg);
     }
 }

@@ -65,10 +65,13 @@ namespace EncyclopediaExporter.Core
             _loaded = true;
         }
 
-        /// <summary>源文件是否变更（哈希不同或游戏版本不同）。</summary>
-        public bool IsChanged(string assetsDir, string gameVersion)
+        /// <summary>源文件是否变更（哈希不同、游戏版本不同，或产物目录缺失）。</summary>
+        public bool IsChanged(string assetsDir, string gameVersion, string outputDir)
         {
             if (!_loaded) Load();
+            // 产物目录缺失 → 必须重建（即使哈希没变，玩家可能删了产物或换了机器）
+            if (string.IsNullOrEmpty(outputDir) || !Directory.Exists(outputDir))
+                return true;
             var current = ComputeHashes(assetsDir);
             // 文件数不同 → 变更
             if (current.Count != _hashes.Count) return true;

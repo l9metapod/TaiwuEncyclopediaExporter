@@ -2,7 +2,9 @@
 
 将《太吾绘卷》内置百科（百晓册）重建为结构化 **Markdown 文档**的游戏内 Mod。
 
-启用后自动读取游戏百科源数据，按游戏实际渲染逻辑生成 188 个 Markdown 页面，方便交给 AI 做攻略，或用 Obsidian 等工具离线浏览。
+启用后自动读取游戏百科源数据与运行时配置，生成 188 个百科页面 + 1800 余条悬浮词条详情（功法/特性等的完整属性与效果），方便交给 AI 做攻略，或用 Obsidian 等工具离线浏览。
+
+> 输出独立于 Mod 目录（`<游戏根>/EncyclopediaExporter_Output/`），通过游戏内置编辑器上传创意工坊时不会被误打包。
 
 > 面向玩家的完整说明见 [`Mod/EncyclopediaExporter/README.md`](Mod/EncyclopediaExporter/README.md)。
 

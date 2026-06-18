@@ -29,6 +29,14 @@ namespace EncyclopediaExporter.Core
         // Heading4 key -> (所在页相对路径, 锚点)
         private Dictionary<string, Tuple<string, string>> _keyToAnchor;
 
+        // Reference target(百科链接目标) -> Tips 词条文件的相对路径(如 词条/功法/沛然诀.md)
+        // 在 BuildTipLibrary 时填充，供页面渲染时把 <link="功法-沛然诀"> 指向词条文件
+        private Dictionary<string, string> _tipFileMap;
+
+        // 本次将要（重新）生成的 .md 文件相对路径集合（正斜杠，相对 _outputDir）。
+        // CleanOutput 只删这个集合里的文件，其余（玩家的 .md 笔记、.obsidian 等）一律保留。
+        private HashSet<string> _generatedPaths;
+
         public EncyclopediaBuilder(string assetsDir, string outputDir)
         {
             _assetsDir = assetsDir;
@@ -58,25 +66,118 @@ namespace EncyclopediaExporter.Core
             _tables = new TableRenderer(_assetsDir, null);
             _md = new MarkdownRenderer(MakeResolver(null));
 
-            // 5. 清理输出目录
-            // 只删除本工具产出的 *.md 文件，保留用户放入的任何其它内容
-            // （如 .obsidian / .claude / .git / 自定义笔记等），避免更新后丢失用户设置。
+            // 5. 计算本次将要生成的所有 .md 路径（白名单），用于精确清理
+            //    只删本工具会重新生成的文件，玩家自己写的 .md 笔记一律保留
+            _generatedPaths = new HashSet<string>();
+            foreach (var page in pages)
+                _generatedPaths.Add(GetPageRelPath(page, NonEmptyTitles(page, 3)) + ".md");
+            CollectTipPaths();
+
+            // 6. 清理输出目录（仅删除白名单内的 .md + 清空空目录）
             CleanOutput();
 
-            // 6. 逐页生成
+            // 7. 生成悬浮信息词条库（功法/特性/武器等详情，从运行时配置读取）
+            //    先于页面生成，以便页面里的 <link="功法-X"> 能指向已生成的词条文件
+            int tips = BuildTipLibrary();
+
+            // 8. 逐页生成
             int written = 0;
             foreach (var page in pages)
             {
                 WritePage(page);
                 written++;
             }
+
+            return written + tips;
+        }
+
+        /// <summary>
+        /// 遍历 Reference 表的核心 Tips 类型，为每个有效条目生成词条文件到 output/词条/&lt;类型&gt;/。
+        /// 数据从运行时 Config 单例读取（Initialize 时已加载），文字+数值一并导出。
+        /// 返回生成的词条数。
+        /// </summary>
+        private int BuildTipLibrary()
+        {
+            int written = 0;
+            _tipFileMap = new Dictionary<string, string>();
+            // 按类型分组统计，用于日志
+            var counts = new Dictionary<ReferenceInsertType, int>();
+
+            foreach (var pair in _references)
+            {
+                string target = pair.Key;        // 百科链接目标（col0 id）
+                var refItem = pair.Value;
+                if (!TipTypeConfig.EnumMap.TryGetValue(refItem.InsertType, out var meta))
+                    continue; // 非核心类型，跳过
+
+                // 解析 ID：param 通常是数字；促织Tips 在 Params[0]（本期未支持促织）
+                int id;
+                if (!TryParseTipId(refItem, out id))
+                    continue;
+
+                try
+                {
+                    var result = TipEntryResolver.Render(refItem.InsertType, id);
+                    if (result == null) continue;
+
+                    string fileName = result.Item1;
+                    string body = result.Item2;
+                    if (string.IsNullOrEmpty(fileName)) continue;
+
+                    string relDir = "词条/" + meta.SubDir;
+                    string dir = Path.Combine(_outputDir, relDir.Replace('/', Path.DirectorySeparatorChar));
+                    Directory.CreateDirectory(dir);
+                    string relPath = relDir + "/" + fileName + ".md";
+                    string path = Path.Combine(_outputDir, relPath.Replace('/', Path.DirectorySeparatorChar));
+
+                    // 记录链接映射（用正斜杠相对路径，供 MakeResolver 计算页面相对链接）
+                    // 同名词条去重：已存在则跳过文件写入，但仍记录链接（指向首个）
+                    if (!_tipFileMap.ContainsKey(target))
+                        _tipFileMap[target] = relPath;
+                    if (File.Exists(path))
+                        continue;
+
+                    File.WriteAllText(path, body, new UTF8Encoding(false));
+                    written++;
+                    if (!counts.ContainsKey(refItem.InsertType)) counts[refItem.InsertType] = 0;
+                    counts[refItem.InsertType]++;
+                }
+                catch (Exception ex)
+                {
+                    // 单个词条失败不影响整体
+                    UnityEngine.Debug.LogWarning("[EncyclopediaExporter] 词条生成失败: "
+                        + refItem.InsertType + " id=" + id + " " + ex.Message);
+                }
+            }
+
+            foreach (var kv in counts)
+                UnityEngine.Debug.Log("[EncyclopediaExporter] 词条 " + kv.Key + ": " + kv.Value + " 条");
+
             return written;
         }
 
         /// <summary>
-        /// 清理输出目录：仅删除本工具产出的 *.md 文件，并移除因此变空的目录。
-        /// 保留用户放入的任何其它内容（.obsidian / .claude / .git / 自定义笔记等），
-        /// 避免游戏更新触发重建后丢失用户的查看器/AI 配置。
+        /// 解析 Reference 的 Tips ID。
+        /// 默认从 Param(col2) 取数字；促织Tips 从 Params[0] 的 {n,} 取（本期未实现促织）。
+        /// </summary>
+        private static bool TryParseTipId(ReferenceItem refItem, out int id)
+        {
+            id = -1;
+            if (refItem.InsertType == ReferenceInsertType.CricketTips)
+            {
+                // 促织：id 在 Params[0]，格式 {n,}。本期未支持，跳过。
+                return false;
+            }
+            string raw = refItem.Param?.Trim();
+            if (string.IsNullOrEmpty(raw)) return false;
+            // param 可能是数字 ID，也可能是字符串名（部分特性）——本期仅支持数字
+            return int.TryParse(raw, out id);
+        }
+
+        /// <summary>
+        /// 清理输出目录：仅删除白名单（本次将生成的 .md）内的文件，并移除因此变空的目录。
+        /// 保留用户放入的任何其它内容——包括玩家自己写的 .md 笔记、.obsidian / .claude / .git 等，
+        /// 避免游戏更新触发重建后丢失用户数据。
         /// </summary>
         private void CleanOutput()
         {
@@ -86,14 +187,56 @@ namespace EncyclopediaExporter.Core
                 return;
             }
 
-            // 删除所有 .md 文件（递归）
+            if (_generatedPaths == null || _generatedPaths.Count == 0)
+            {
+                // 无白名单（异常情况）则不删任何东西，避免误伤
+                return;
+            }
+
+            // 构建白名单的本地路径集合（用 OS 分隔符比较）
+            var whitelist = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var rel in _generatedPaths)
+                whitelist.Add(rel.Replace('/', Path.DirectorySeparatorChar));
+
+            // 只删除白名单内的 .md 文件
             foreach (var md in Directory.EnumerateFiles(_outputDir, "*.md", SearchOption.AllDirectories))
             {
-                try { File.Delete(md); } catch { /* 忽略单个文件删除失败 */ }
+                string rel = md.Substring(_outputDir.Length).TrimStart(Path.DirectorySeparatorChar, '/', '\\');
+                if (whitelist.Contains(rel))
+                {
+                    try { File.Delete(md); } catch { /* 忽略单个文件删除失败 */ }
+                }
             }
 
             // 自底向上移除变空的目录，但保留任何含内容的目录（保护用户文件）
             PruneEmptyDirs(_outputDir);
+        }
+
+        /// <summary>
+        /// 预先收集本次将生成的所有 Tips 词条相对路径（不写文件）。
+        /// 供 CleanOutput 的白名单使用，确保只删本工具自己产出的词条，不碰玩家笔记。
+        /// </summary>
+        private void CollectTipPaths()
+        {
+            foreach (var pair in _references)
+            {
+                var refItem = pair.Value;
+                if (!TipTypeConfig.EnumMap.TryGetValue(refItem.InsertType, out var meta))
+                    continue;
+                int id;
+                if (!TryParseTipId(refItem, out id))
+                    continue;
+                try
+                {
+                    var result = TipEntryResolver.Render(refItem.InsertType, id);
+                    if (result == null) continue;
+                    string fileName = result.Item1;
+                    if (string.IsNullOrEmpty(fileName)) continue;
+                    string relPath = "词条/" + meta.SubDir + "/" + fileName + ".md";
+                    _generatedPaths.Add(relPath);
+                }
+                catch { /* 收集阶段忽略单个失败 */ }
+            }
         }
 
         /// <summary>
@@ -207,6 +350,9 @@ namespace EncyclopediaExporter.Core
                     return new ResolveResult { Type = ResolveType.Table, Param = refItem.Param };
                 if (refItem.InsertType == ReferenceInsertType.Figure)
                     return new ResolveResult { Type = ResolveType.Image, Param = refItem.Param };
+                // Tips：若该链接目标有对应的词条文件，返回指向它的页面链接
+                if (_tipFileMap != null && _tipFileMap.TryGetValue(target, out var tipRel))
+                    return Result(currentPageRelNoExt, tipRel.Substring(0, tipRel.Length - 3)); // 去掉 .md
                 return new ResolveResult { Type = ResolveType.Tip, Param = refItem.Param };
             };
         }
