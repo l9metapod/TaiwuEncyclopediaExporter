@@ -56,6 +56,23 @@
       <HintPath>$(ManagedDir)GameData.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <!-- 卡片探针用：Harmony patch + TMP 文本读取 + RectTransform -->
+    <Reference Include="0Harmony">
+      <HintPath>$(ManagedDir)0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>$(ManagedDir)UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(ManagedDir)Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>$(ManagedDir)UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
   </ItemGroup>
 
   <Target Name="CopyToModAfterBuild" AfterTargets="Build">

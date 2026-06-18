@@ -9,23 +9,60 @@ namespace EncyclopediaExporter.Models
     /// </summary>
     internal static class TipTypeConfig
     {
-        /// <summary>Tips InsertType 枚举 → 导出元数据（仅核心 6 类）。</summary>
+        /// <summary>Tips InsertType 枚举 → 导出元数据（核心装备 + 词条类）。</summary>
         public static readonly Dictionary<ReferenceInsertType, TipMeta> EnumMap =
             new Dictionary<ReferenceInsertType, TipMeta>
             {
                 { ReferenceInsertType.CombatSkillTips, new TipMeta("功法", "CombatSkill") },
                 { ReferenceInsertType.FeatureTips, new TipMeta("特性", "CharacterFeature") },
-                // 武器（装备）词条暂未与功法/战斗联动，信息孤立，先屏蔽。
-                // RenderWeapon 实现保留，待后续补充破体破气/攻击范围/招式等联动字段后恢复。
-                // { ReferenceInsertType.WeaponTips, new TipMeta("武器", "Weapon") },
+                // 装备类（第一阶段+第二阶段）
+                { ReferenceInsertType.WeaponTips, new TipMeta("武器", "Weapon") },
+                { ReferenceInsertType.ArmorTips, new TipMeta("盔甲", "Armor") },
+                { ReferenceInsertType.ClothingTips, new TipMeta("衣装", "Clothing") },
+                { ReferenceInsertType.AccessoryTips, new TipMeta("宝物", "Accessory") },
+                { ReferenceInsertType.CraftToolTips, new TipMeta("工具", "CraftTool") },
+                // 消耗品/其他（第三阶段）
+                { ReferenceInsertType.MedicineTips, new TipMeta("药毒", "Medicine") },
+                { ReferenceInsertType.MaterialTips, new TipMeta("引子", "Material") },
+                { ReferenceInsertType.SkillBookTips, new TipMeta("书籍", "SkillBook") },
+                { ReferenceInsertType.MiscTips, new TipMeta("杂物", "Misc") },
+                { ReferenceInsertType.FoodTips, new TipMeta("食物", "Food") },
+                { ReferenceInsertType.TeaWineTips, new TipMeta("茶酒", "TeaWine") },
+                { ReferenceInsertType.CarrierTips, new TipMeta("代步", "Carrier") },
+                { ReferenceInsertType.CricketTips, new TipMeta("促织", "Cricket") },
+                // 基础词条类
                 { ReferenceInsertType.ProtagonistFeatureTips, new TipMeta("出身特质", "ProtagonistFeature") },
                 { ReferenceInsertType.NeiliTypeTips, new TipMeta("内力属性", "NeiliType") },
                 { ReferenceInsertType.TrickTypeTips, new TipMeta("招式", "TrickType") },
             };
 
+        /// <summary>武器子类 short(ItemSubType) → 可读名（LK_ItemSubType_0~17，已确认）。
+        /// 0针匣 1对刺 2暗器 3箫笛 4掌套 5短杵 6拂尘 7长鞭 8剑 9刀 10长兵 11瑶琴 12机关 13令符 14药霜 15毒砂 16神兵 17动物</summary>
+        public static readonly string[] WeaponSubTypeNames =
+        {
+            "针匣", "对刺", "暗器", "箫笛", "掌套", "短杵", "拂尘", "长鞭",
+            "剑", "刀", "长兵", "瑶琴", "机关", "令符", "药霜", "毒砂", "神兵", "动物"
+        };
+
+        /// <summary>武器子类名（越界返回"未知"）。</summary>
+        public static string WeaponSubTypeName(short subType) =>
+            (subType >= 0 && subType < WeaponSubTypeNames.Length) ? WeaponSubTypeNames[subType] : "未知";
+
         /// <summary>品阶 sbyte → 可读名（九品～一品）。</summary>
         public static readonly string[] GradeNames =
             { "九品", "八品", "七品", "六品", "五品", "四品", "三品", "二品", "一品" };
+
+        /// <summary>品阶前缀（下/中/上/奇/秘/极/超/绝/神），对应 Grade 0-8。
+        /// 来自 LK_ShortGrade_0~8。显示格式："前缀·X品"（如九品="下·九品"、三品="超·三品"）。</summary>
+        public static readonly string[] GradePrefixes =
+            { "下", "中", "上", "奇", "秘", "极", "超", "绝", "神" };
+
+        /// <summary>完整品阶显示（如"超·三品"）。对齐游戏卡片 GradeLabel 格式。</summary>
+        public static string GradeDisplay(sbyte g)
+        {
+            if (g < 0 || g >= GradeNames.Length) return "未知";
+            return GradePrefixes[g] + "·" + GradeNames[g];
+        }
 
         /// <summary>功法五行/内力属性 sbyte → 可读名（金刚/紫霞/玄阴/纯阳/归元/混元）。</summary>
         public static readonly string[] FiveElementsNames =

@@ -46,6 +46,21 @@ namespace EncyclopediaExporter
                 // 关掉开关，避免下次误触发
                 TrySetSetting("ForceReExport", false);
             }
+
+            // 卡片探针开关（开发用）：开则挂 Harmony patch dump 武器卡片布局
+            bool probe = false;
+            if (ModManager.GetSetting(ModIdStr, "CardProbe", ref probe))
+            {
+                if (probe && !CardProbe.IsEnabled)
+                {
+                    Log("启用卡片探针...");
+                    CardProbe.Enable();
+                }
+                else if (!probe && CardProbe.IsEnabled)
+                {
+                    CardProbe.Disable();
+                }
+            }
         }
 
         public override void Dispose() { }
@@ -89,6 +104,15 @@ namespace EncyclopediaExporter
                 }
 
                 Directory.CreateDirectory(_outputDir);
+
+                // 读取「添加颜色标签」配置，设置渲染器开关
+                bool includeColor = true;
+                if (ModManager.GetSetting(ModIdStr, "IncludeColorTags", ref includeColor))
+                {
+                    MarkdownRenderer.IncludeColorTags = includeColor;
+                    Log("颜色标签: " + (includeColor ? "保留（<span>）" : "去除（纯文本）"));
+                }
+
                 var builder = new EncyclopediaBuilder(_assetsDir, _outputDir);
                 int count = builder.Build();
 

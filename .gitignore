@@ -28,3 +28,12 @@ Desktop.ini
 
 # === 本地迁移文档（含本地路径，不提交）===
 /HANDOFF.md
+
+# === 卡片探针产物（开发调试用，不入库）===
+# raw/ 是原始 Player.log 备份；samples/ 是去重 dump 样本（游戏更新后可能要重 dump）。
+# colors_table.txt 作为例外保留（188 条颜色表，有长期参考价值）。
+/_probe/raw/
+/_probe/samples/
+
+# === 杂项：Windows 设备名误生成的垃圾文件 ===
+/nul

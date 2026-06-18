@@ -15,6 +15,11 @@ namespace EncyclopediaExporter.Core
     {
         private readonly Func<string, ResolveResult> _resolver;
 
+        /// <summary>是否输出颜色标签。
+        /// true（默认）：<color=#hex> → <span style="color:#hex">（Obsidian/AI 友好）
+        /// false：去掉颜色标签，仅保留文字（纯 Markdown/GitHub 兼容）。</summary>
+        public static bool IncludeColorTags { get; set; } = true;
+
         public MarkdownRenderer(Func<string, ResolveResult> resolver)
         {
             _resolver = resolver;
@@ -31,11 +36,12 @@ namespace EncyclopediaExporter.Core
             s = Regex.Replace(s, @"<i>(.*?)</i>", "*$1*", RegexOptions.Singleline);
             s = Regex.Replace(s, @"</?u>", "");
 
-            // <color=#hex>...</color> → span; 别名→保留文字
+            // <color=#hex>...</color>：按 IncludeColorTags 开关切换
             s = Regex.Replace(s, @"<color=([^>]*)>(.*?)</color>", m =>
             {
                 string color = m.Groups[1].Value;
                 string inner = m.Groups[2].Value;
+                if (!IncludeColorTags) return inner;  // 纯文本模式：仅保留文字
                 if (Regex.IsMatch(color, @"^#[0-9a-fA-F]{6,8}$"))
                     return "<span style=\"color:" + color + "\">" + inner + "</span>";
                 return inner;  // 语义别名: 文字本身已是可见内容

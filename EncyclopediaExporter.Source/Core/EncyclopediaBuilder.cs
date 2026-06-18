@@ -158,20 +158,30 @@ namespace EncyclopediaExporter.Core
 
         /// <summary>
         /// 解析 Reference 的 Tips ID。
-        /// 默认从 Param(col2) 取数字；促织Tips 从 Params[0] 的 {n,} 取（本期未实现促织）。
+        /// 默认从 Param(col2) 取数字；促织Tips 从 Params[0] 的 {n,} 取。
         /// </summary>
         private static bool TryParseTipId(ReferenceItem refItem, out int id)
         {
             id = -1;
             if (refItem.InsertType == ReferenceInsertType.CricketTips)
             {
-                // 促织：id 在 Params[0]，格式 {n,}。本期未支持，跳过。
+                // 促织：id 在 Params[0]，格式 "{n,}"。提取花括号内逗号前的数字。
+                var ps = refItem.Params;
+                if (ps == null || ps.Count == 0) return false;
+                string raw = ps[0];
+                int start = raw.IndexOf('{');
+                int comma = raw.IndexOf(',');
+                if (start >= 0 && comma > start)
+                {
+                    string num = raw.Substring(start + 1, comma - start - 1);
+                    return int.TryParse(num, out id);
+                }
                 return false;
             }
-            string raw = refItem.Param?.Trim();
-            if (string.IsNullOrEmpty(raw)) return false;
+            string raw2 = refItem.Param?.Trim();
+            if (string.IsNullOrEmpty(raw2)) return false;
             // param 可能是数字 ID，也可能是字符串名（部分特性）——本期仅支持数字
-            return int.TryParse(raw, out id);
+            return int.TryParse(raw2, out id);
         }
 
         /// <summary>
