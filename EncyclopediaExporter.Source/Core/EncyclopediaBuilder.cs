@@ -503,12 +503,33 @@ namespace EncyclopediaExporter.Core
                             lines.Add("*（图片：" + (refItem.Param ?? "") + "）*");
                         else if (refItem.InsertType == ReferenceInsertType.TableCollection)
                         {
-                            if (refItem.Params.Count > 0
-                                && _references.TryGetValue(refItem.Params[0], out var sub)
-                                && sub.InsertType == ReferenceInsertType.ConfigTable)
-                                lines.Add(_tables.Render(sub));
-                            else
+                            // 表格集合（游戏里可切 tab 的多 sheet 表）：
+                            // Params = 子表 ConfigTable id 列表，Desc = 每个 sheet 的 tab 标签名（一一对应）
+                            // 旧实现只渲染 Params[0]，导致其余 sheet 全丢（影响兵器/护具/功法/促织部位等 20+ 个一览表）
+                            var sheetIds = refItem.Params;
+                            var sheetNames = refItem.Desc;
+                            if (sheetIds == null || sheetIds.Count == 0)
+                            {
                                 lines.Add("*（表格集合：" + refId + "）*");
+                            }
+                            else
+                            {
+                                for (int si = 0; si < sheetIds.Count; si++)
+                                {
+                                    if (!_references.TryGetValue(sheetIds[si], out var sub)) continue;
+                                    if (sub.InsertType != ReferenceInsertType.ConfigTable) continue;
+                                    // 用 tab 标签名作为小标题，让每个 sheet 独立成段（Obsidian 里清晰分块）
+                                    string sheetTitle = (si < sheetNames.Count && !string.IsNullOrEmpty(sheetNames[si]))
+                                                        ? sheetNames[si] : null;
+                                    if (sheetTitle != null)
+                                    {
+                                        lines.Add("**" + sheetTitle + "**");
+                                        lines.Add("");
+                                    }
+                                    lines.Add(_tables.Render(sub, sheetTitle));
+                                    if (si < sheetIds.Count - 1) lines.Add("");
+                                }
+                            }
                         }
                         else
                             lines.Add("*（引用：" + refId + "）*");
