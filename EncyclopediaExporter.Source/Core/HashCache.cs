@@ -67,7 +67,10 @@ namespace EncyclopediaExporter.Core
             _loaded = true;
         }
 
-        /// <summary>源文件是否变更（哈希不同、游戏版本不同，或产物目录缺失）。</summary>
+        /// <summary>源文件是否变更（哈希不同或产物目录缺失）。
+        /// 只靠 TSV 文件哈希检测变更，不比较游戏版本号——因为 Application.version
+        /// 在 mod 加载早期可能返回不稳定值（如占位符 1.0.0），导致每次都误判变更。
+        /// TSV 哈希已足够检测内容变化（游戏更新百科会改 TSV）。</summary>
         public bool IsChanged(string assetsDir, string gameVersion, string outputDir)
         {
             if (!_loaded) Load();
@@ -83,9 +86,6 @@ namespace EncyclopediaExporter.Core
                 if (!_hashes.TryGetValue(kv.Key, out old) || old != kv.Value)
                     return true;
             }
-            // 游戏版本变化也视为变更（结构可能改了）
-            if (!string.IsNullOrEmpty(gameVersion) && _cachedGameVersion != gameVersion)
-                return true;
             return false;
         }
 
