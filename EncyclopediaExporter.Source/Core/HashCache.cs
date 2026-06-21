@@ -56,9 +56,11 @@ namespace EncyclopediaExporter.Core
                     if (idx < 0) continue;
                     var key = trimmed.Substring(0, idx);
                     var rest = trimmed.Substring(idx + 4);
-                    var val = rest.Substring(0, rest.Length - (rest.EndsWith("\"") ? 1 : 0));
-                    if (key == "__game_version") _cachedGameVersion = val;
-                    else _hashes[key] = val;
+                    // 去掉行尾逗号（JSON 列表分隔符）和结尾引号
+                    if (rest.EndsWith(",")) rest = rest.Substring(0, rest.Length - 1);
+                    if (rest.EndsWith("\"")) rest = rest.Substring(0, rest.Length - 1);
+                    if (key == "__game_version") _cachedGameVersion = rest;
+                    else _hashes[key] = rest;
                 }
             }
             catch { /* 损坏缓存忽略 */ }
