@@ -218,20 +218,39 @@ namespace EncyclopediaExporter.Core
                 sb.AppendLine(string.Join("　", parts));
             }
 
-            // 运功效果（属性加成）——装备/突破此功法时获得的属性，是 build 搭配的核心数据。
-            // 来自 CombatSkillItem.PropertyAddList（List<PropertyAndValue>），渲染链：
-            //   属性名 = CharacterPropertyDisplay[CharacterPropertyReferenced[PropertyId].DisplayType].Name
-            if (s.PropertyAddList != null && s.PropertyAddList.Count > 0)
+            // 运功效果（装备此功法获得的属性加成）——build 搭配的核心数据。两个来源合并：
+            // 1) PropertyAddList：绝技类功法的固定属性加成（如"+膂力 10"）
+            // 2) CalcDefaultNeiliAllocationBonus：内功/轻功等按内力分配计算的属性加成
+            //    （扩展方法 NeiliAllocationBonusHelper.CalcDefaultNeiliAllocationBonus，依赖
+            //     GetMapping/GlobalConfig/NeiliAllocationEffect，链太深故反射调用拿结果）
+            var effectParts = new List<string>();
+            if (s.PropertyAddList != null)
             {
-                sb.AppendLine();
-                var parts = new List<string>();
                 foreach (var pv in s.PropertyAddList)
                 {
                     string sign = pv.Value >= 0 ? "+" : "";
-                    parts.Add("**" + GetPropertyName(pv.PropertyId) + "** " + sign + pv.Value);
+                    effectParts.Add("**" + GetPropertyName(pv.PropertyId) + "** " + sign + pv.Value);
                 }
+            }
+            // 内力分配加成（内功/轻功的核心属性来源）
+            var neiliBonus = CalcNeiliAllocationBonus(s);
+            if (neiliBonus != null)
+            {
+                foreach (var kv in neiliBonus)
+                {
+                    effectParts.Add("**" + GetPropertyName(kv.Key) + "** +" + kv.Value);
+                }
+            }
+            if (effectParts.Count > 0)
+            {
+                sb.AppendLine();
                 sb.AppendLine("## 运功效果");
-                sb.AppendLine(string.Join("　", parts));
+                // 多个时按 4 个一行排版，避免一行过长
+                for (int i = 0; i < effectParts.Count; i += 4)
+                {
+                    int take = Math.Min(4, effectParts.Count - i);
+                    sb.AppendLine(string.Join("　", effectParts.GetRange(i, take)));
+                }
             }
 
             // 运功路径（突破起止位置）
@@ -346,6 +365,48 @@ namespace EncyclopediaExporter.Core
             }
             catch { }
             return "属性#" + propertyId;
+        }
+
+        /// <summary>
+        /// 反射调用 CombatSkillItem.CalcDefaultNeiliAllocationBonus()，取得内力分配带来的属性加成。
+        /// 该扩展方法（NeiliAllocationBonusHelper.CalcDefaultNeiliAllocationBonus）按内力分配计算
+        /// 内功/轻功等功法的属性加成，是 build 搭配的核心数据。
+        /// 返回 List&lt;(short propertyId, int value)&gt;；失败返回 null。
+        /// </summary>
+        private static List<KeyValuePair<short, int>> CalcNeiliAllocationBonus(CombatSkillItem s)
+        {
+            if (s == null) return null;
+            try
+            {
+                // 扩展方法定义在 NeiliAllocationBonusHelper 静态类，通过反射按方法名查找
+                System.Reflection.MethodInfo method = null;
+                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var helperType = asm.GetType("NeiliAllocationBonusHelper");
+                    if (helperType != null)
+                    {
+                        method = helperType.GetMethod("CalcDefaultNeiliAllocationBonus");
+                        if (method != null) break;
+                    }
+                }
+                if (method == null) return null;
+
+                var result = method.Invoke(null, new object[] { s }) as System.Collections.IList;
+                if (result == null || result.Count == 0) return null;
+
+                var list = new List<KeyValuePair<short, int>>(result.Count);
+                // 返回类型是 List<ValueTuple<short,int>>，用反射读 Item1/Item2
+                foreach (var item in result)
+                {
+                    var t = item.GetType();
+                    short pid = (short)t.GetField("Item1").GetValue(item);
+                    int val = (int)t.GetField("Item2").GetValue(item);
+                    if (val > 0) list.Add(new KeyValuePair<short, int>(pid, val));
+                }
+                return list.Count > 0 ? list : null;
+            }
+            catch { /* 反射失败不影响整体渲染 */ }
+            return null;
         }
 
         // ============ 特性 CharacterFeature ============
