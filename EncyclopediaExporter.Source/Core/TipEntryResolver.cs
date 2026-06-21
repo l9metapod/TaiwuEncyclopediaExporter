@@ -63,10 +63,10 @@ namespace EncyclopediaExporter.Core
             tags.Add(TipTypeConfig.FiveElementsName(s.FiveElements));
             tags.Add(SafeName(() => Organization.Instance[s.SectId]?.Name));
             sb.AppendLine("**" + string.Join(" · ", tags) + "**");
-            // 次要属性（内力/格子/最适武器）内联，不占行
+            // 次要属性（内力/格子消耗/最适武器）内联，不占行
             var extras = new List<string>();
             if (s.TotalObtainableNeili != 0) extras.Add("**内力** " + s.TotalObtainableNeili);
-            if (s.GridCost != 0) extras.Add("**格子** " + s.GridCost);
+            if (s.GridCost != 0) extras.Add("**消耗格子** " + s.GridCost);
             if (s.MobilityCost != 0) extras.Add("**脚力** " + s.MobilityCost + "%");
             if (s.MostFittingWeaponID > 0)
                 extras.Add("**最适** " + SafeName(() => Weapon.Instance[s.MostFittingWeaponID]?.Name));
@@ -74,6 +74,23 @@ namespace EncyclopediaExporter.Core
             {
                 sb.AppendLine();
                 sb.AppendLine(string.Join("　", extras));
+            }
+
+            // 提供栏位（SpecificGrids）：装上此功法后，摧破/轻灵/护体/奇窍各增加的格子数。
+            // 下标来自 TooltipCombatSkill：[0]AttackGrid=摧破 [1]AgileGrid=轻灵 [2]DefenceGrid=护体 [3]SpecialGrid=奇窍
+            // GenericGrid 是通用格子（可分配到任意栏位）。
+            if (s.SpecificGrids != null && s.SpecificGrids.Length >= 4)
+            {
+                var grids = new List<string>();
+                string[] gridNames = { "摧破", "轻灵", "护体", "奇窍" };
+                for (int i = 0; i < 4; i++)
+                    if (s.SpecificGrids[i] != 0) grids.Add(gridNames[i] + " +" + s.SpecificGrids[i]);
+                if (s.GenericGrid != 0) grids.Add("通用 +" + s.GenericGrid);
+                if (grids.Count > 0)
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("**栏位** " + string.Join("　", grids));
+                }
             }
 
             // 描述
@@ -201,7 +218,9 @@ namespace EncyclopediaExporter.Core
                 sb.AppendLine(string.Join("　", parts));
             }
 
-            // 属性加成——内联粗体
+            // 运功效果（属性加成）——装备/突破此功法时获得的属性，是 build 搭配的核心数据。
+            // 来自 CombatSkillItem.PropertyAddList（List<PropertyAndValue>），渲染链：
+            //   属性名 = CharacterPropertyDisplay[CharacterPropertyReferenced[PropertyId].DisplayType].Name
             if (s.PropertyAddList != null && s.PropertyAddList.Count > 0)
             {
                 sb.AppendLine();
@@ -211,15 +230,15 @@ namespace EncyclopediaExporter.Core
                     string sign = pv.Value >= 0 ? "+" : "";
                     parts.Add("**" + GetPropertyName(pv.PropertyId) + "** " + sign + pv.Value);
                 }
-                sb.AppendLine("## 属性加成");
+                sb.AppendLine("## 运功效果");
                 sb.AppendLine(string.Join("　", parts));
             }
 
-            // 运功路径
+            // 运功路径（突破起止位置）
             if (!string.IsNullOrEmpty(s.BreakStart) || !string.IsNullOrEmpty(s.BreakEnd))
             {
                 sb.AppendLine();
-                sb.AppendLine("**运功** " + NullToEmpty(s.BreakStart) + " → " + NullToEmpty(s.BreakEnd));
+                sb.AppendLine("**运功路径** " + NullToEmpty(s.BreakStart) + " → " + NullToEmpty(s.BreakEnd));
             }
 
             AppendFootnote(sb);
