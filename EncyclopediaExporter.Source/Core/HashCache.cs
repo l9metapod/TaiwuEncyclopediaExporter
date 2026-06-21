@@ -14,7 +14,6 @@ namespace EncyclopediaExporter.Core
     {
         private readonly string _cachePath;
         private Dictionary<string, string> _hashes;
-        private string _cachedGameVersion;
         private bool _loaded;
 
         public HashCache(string cachePath)
@@ -44,7 +43,6 @@ namespace EncyclopediaExporter.Core
         private void Load()
         {
             _hashes = new Dictionary<string, string>();
-            _cachedGameVersion = "";
             if (!File.Exists(_cachePath)) { _loaded = true; return; }
             try
             {
@@ -59,8 +57,9 @@ namespace EncyclopediaExporter.Core
                     // 去掉行尾逗号（JSON 列表分隔符）和结尾引号
                     if (rest.EndsWith(",")) rest = rest.Substring(0, rest.Length - 1);
                     if (rest.EndsWith("\"")) rest = rest.Substring(0, rest.Length - 1);
-                    if (key == "__game_version") _cachedGameVersion = rest;
-                    else _hashes[key] = rest;
+                    // 只接受 .tsv 文件名作为哈希 key，忽略 __game_version/__updated/sources 等元信息行
+                    if (!key.EndsWith(".tsv")) continue;
+                    _hashes[key] = rest;
                 }
             }
             catch { /* 损坏缓存忽略 */ }
