@@ -776,7 +776,10 @@ namespace EncyclopediaExporter.Core
                 var parts = new List<string>();
                 foreach (sbyte lsType in t.RequiredLifeSkillTypes)
                 {
-                    string lsName = SafeName(() => LifeSkill.Instance[lsType]?.Name);
+                    // RequiredLifeSkillTypes 存的是技艺类型枚举（6=锻造 7=制木 8=医术...），
+                    // 必须查 LifeSkillType 表（类型名：锻造/制木/医术...），不能查 LifeSkill 表
+                    // （后者是具体功法条目，如「霓裳曲谱」，用类型值当 id 会查到不相干的条目）
+                    string lsName = SafeName(() => Config.LifeSkillType.Instance[lsType]?.Name);
                     parts.Add("**" + lsName + "造诣** +" + t.AttainmentBonus);
                 }
                 sb.AppendLine(string.Join("　", parts));
