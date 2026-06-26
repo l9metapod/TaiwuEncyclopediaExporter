@@ -17,6 +17,21 @@ namespace EncyclopediaExporter.Core
     /// </summary>
     internal static class TipEntryResolver
     {
+        // 共享的 Markdown 渲染器（词条描述里一般没有跨页 link，用空 resolver 即可；
+        // 若含 <link>，ConvertBody 会保留可见文字）。
+        // 用于把运行时 Config 字段（Desc/FunctionDesc 等）里的 <color=#pinkyellow> 等
+        // 原始标签还原成 <span style="color:#hex">。
+        private static readonly MarkdownRenderer _md =
+            new MarkdownRenderer(_ => null);
+
+        /// <summary>处理运行时 Config 字段的富文本：先 ProcessContent（转义还原+颜色替换），
+        /// 再 ConvertBody（color→span、去残留标签）。所有从 Config.XxxItem 读出的文本字段都应过这个。</summary>
+        private static string RT(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return "";
+            return _md.ConvertBody(DataParser.ProcessContent(raw)).Trim();
+        }
+
         /// <summary>
         /// 渲染单个词条。返回 (文件名不含扩展名, markdown 正文)；若 ID 无效返回 null。
         /// </summary>
@@ -94,15 +109,16 @@ namespace EncyclopediaExporter.Core
             }
 
             // 描述
-            if (!string.IsNullOrEmpty(s.Desc))
+            string descRT = RT(s.Desc);
+            if (!string.IsNullOrEmpty(descRT))
             {
                 sb.AppendLine();
-                sb.AppendLine(s.Desc);
+                sb.AppendLine(descRT);
             }
 
             // 心法效果（正练/逆练）
-            string direct = GetSpecialEffectDesc(s.DirectEffectID);
-            string reverse = GetSpecialEffectDesc(s.ReverseEffectID);
+            string direct = RT(GetSpecialEffectDesc(s.DirectEffectID));
+            string reverse = RT(GetSpecialEffectDesc(s.ReverseEffectID));
             if (!string.IsNullOrEmpty(direct) || !string.IsNullOrEmpty(reverse))
             {
                 sb.AppendLine();
@@ -434,15 +450,17 @@ namespace EncyclopediaExporter.Core
             AddIfNonZero(rows, "机变", f.PersonalityClever);
             AppendTable(sb, rows);
 
-            if (!string.IsNullOrEmpty(f.Desc))
+            string fDescRT = RT(f.Desc);
+            if (!string.IsNullOrEmpty(fDescRT))
             {
                 sb.AppendLine();
-                sb.AppendLine(f.Desc);
+                sb.AppendLine(fDescRT);
             }
-            if (!string.IsNullOrEmpty(f.EffectDesc) && f.EffectDesc != f.Desc)
+            string fEffectRT = RT(f.EffectDesc);
+            if (!string.IsNullOrEmpty(fEffectRT) && fEffectRT != fDescRT)
             {
                 sb.AppendLine();
-                sb.AppendLine(f.EffectDesc);
+                sb.AppendLine(fEffectRT);
             }
 
             AppendFootnote(sb);
@@ -475,10 +493,11 @@ namespace EncyclopediaExporter.Core
             sb.AppendLine("价值 " + w.BaseValue + "　重量 " + FormatItemWeight(w.BaseWeight));
 
             // 描述
-            if (!string.IsNullOrEmpty(w.Desc))
+            string wDescRT = RT(w.Desc);
+            if (!string.IsNullOrEmpty(wDescRT))
             {
                 sb.AppendLine();
-                sb.AppendLine(w.Desc);
+                sb.AppendLine(wDescRT);
             }
 
             // ===== 兵器属性 =====
@@ -631,10 +650,11 @@ namespace EncyclopediaExporter.Core
             sb.AppendLine("**" + string.Join(" · ", tags) + "**");
             sb.AppendLine("价值 " + a.BaseValue + "　重量 " + FormatItemWeight(a.BaseWeight));
 
-            if (!string.IsNullOrEmpty(a.Desc))
+            string aDescRT = RT(a.Desc);
+            if (!string.IsNullOrEmpty(aDescRT))
             {
                 sb.AppendLine();
-                sb.AppendLine(a.Desc);
+                sb.AppendLine(aDescRT);
             }
 
             // ===== 护具属性 =====
@@ -693,15 +713,17 @@ namespace EncyclopediaExporter.Core
             var tags = new List<string> { TipTypeConfig.GradeDisplay(grade), typeLabel, subTypeLabel };
             sb.AppendLine("**" + string.Join(" · ", tags) + "**");
             sb.AppendLine("价值 " + baseValue + "　重量 " + FormatItemWeight(baseWeight));
-            if (!string.IsNullOrEmpty(desc))
+            string descRT = RT(desc);
+            if (!string.IsNullOrEmpty(descRT))
             {
                 sb.AppendLine();
-                sb.AppendLine(desc);
+                sb.AppendLine(descRT);
             }
-            if (!string.IsNullOrEmpty(functionDesc) && functionDesc != desc)
+            string funcRT = RT(functionDesc);
+            if (!string.IsNullOrEmpty(funcRT) && funcRT != descRT)
             {
                 sb.AppendLine();
-                sb.AppendLine(functionDesc);
+                sb.AppendLine(funcRT);
             }
         }
 
@@ -802,7 +824,7 @@ namespace EncyclopediaExporter.Core
                 m.BaseValue, m.BaseWeight, m.Desc, m.FunctionDesc);
 
             // 服食效果
-            string effect = GetSpecialEffectDesc(m.SpecialEffectId);
+            string effect = RT(GetSpecialEffectDesc(m.SpecialEffectId));
             bool hasDuration = m.Duration > 0;
             if (!string.IsNullOrEmpty(effect) || hasDuration)
             {
@@ -1009,10 +1031,11 @@ namespace EncyclopediaExporter.Core
             sb.AppendLine("**" + TipTypeConfig.GradeDisplay(c.Grade) + " · 促织**");
             sb.AppendLine("价值 " + c.BaseValue + "　重量 " + FormatItemWeight(c.BaseWeight));
 
-            if (!string.IsNullOrEmpty(c.Desc))
+            string cDescRT = RT(c.Desc);
+            if (!string.IsNullOrEmpty(cDescRT))
             {
                 sb.AppendLine();
-                sb.AppendLine(c.Desc);
+                sb.AppendLine(cDescRT);
             }
 
             AppendFootnote(sb);
@@ -1030,9 +1053,10 @@ namespace EncyclopediaExporter.Core
             sb.AppendLine();
 
             // 出身特质通常属性较少，主要靠文字描述
-            if (!string.IsNullOrEmpty(p.Desc))
+            string pDescRT = RT(p.Desc);
+            if (!string.IsNullOrEmpty(pDescRT))
             {
-                sb.AppendLine(p.Desc);
+                sb.AppendLine(pDescRT);
             }
 
             AppendFootnote(sb);
@@ -1049,9 +1073,10 @@ namespace EncyclopediaExporter.Core
             sb.AppendLine("# " + n.Name);
             sb.AppendLine();
 
-            if (!string.IsNullOrEmpty(n.Desc))
+            string nDescRT = RT(n.Desc);
+            if (!string.IsNullOrEmpty(nDescRT))
             {
-                sb.AppendLine(n.Desc);
+                sb.AppendLine(nDescRT);
             }
 
             AppendFootnote(sb);
@@ -1068,9 +1093,10 @@ namespace EncyclopediaExporter.Core
             sb.AppendLine("# " + t.Name);
             sb.AppendLine();
 
-            if (!string.IsNullOrEmpty(t.Desc))
+            string tDescRT = RT(t.Desc);
+            if (!string.IsNullOrEmpty(tDescRT))
             {
-                sb.AppendLine(t.Desc);
+                sb.AppendLine(tDescRT);
             }
 
             AppendFootnote(sb);
